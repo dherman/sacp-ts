@@ -2,7 +2,6 @@ import {
   connect as sacpConnect,
   SacpConnection,
   SessionBuilder,
-  McpOverAcpHandler,
   type SchemaProvider,
 } from "@dherman/sacp";
 import { ThinkBuilder } from "./think-builder.js";
@@ -15,11 +14,9 @@ import { ThinkBuilder } from "./think-builder.js";
  */
 export class Patchwork {
   private readonly _connection: SacpConnection;
-  private readonly _mcpHandler: McpOverAcpHandler;
 
   constructor(connection: SacpConnection) {
     this._connection = connection;
-    this._mcpHandler = new McpOverAcpHandler();
   }
 
   /**
@@ -60,14 +57,14 @@ export class Patchwork {
   think<Output>(): ThinkBuilder<Output>;
 
   think<Output>(schema?: SchemaProvider<Output>): ThinkBuilder<Output> {
-    return new ThinkBuilder<Output>(this._connection, this._mcpHandler, schema);
+    return new ThinkBuilder<Output>(this._connection, this._connection.mcpHandler, schema);
   }
 
   /**
    * Create a session builder for more control over session configuration
    */
   session(): SessionBuilder {
-    return new SessionBuilder(this._connection, this._mcpHandler);
+    return new SessionBuilder(this._connection, this._connection.mcpHandler);
   }
 
   /**

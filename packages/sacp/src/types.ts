@@ -85,6 +85,8 @@ export interface McpConnectResponse {
   capabilities: {
     tools?: Record<string, unknown>;
   };
+  /** Optional tool definitions - the bridge may use these to pre-populate tool info */
+  tools?: McpToolDefinition[];
 }
 
 /**

@@ -21,9 +21,12 @@ interface McpConnection {
  * Handler for MCP-over-ACP protocol messages.
  *
  * This class manages the lifecycle of MCP connections tunneled through ACP:
- * - _mcp/connect: Establishes a new MCP connection
- * - _mcp/message: Routes MCP requests to the appropriate server
- * - _mcp/disconnect: Tears down an MCP connection
+ * - mcp/connect: Establishes a new MCP connection
+ * - mcp/message: Routes MCP requests to the appropriate server
+ * - mcp/disconnect: Tears down an MCP connection
+ *
+ * Note: The ACP SDK strips the underscore prefix from extension methods,
+ * so we receive "mcp/connect" even though the wire format is "_mcp/connect".
  */
 export class McpOverAcpHandler {
   /** Maps acp:uuid URLs to registered MCP servers */
@@ -55,10 +58,13 @@ export class McpOverAcpHandler {
   }
 
   /**
-   * Handle an incoming _mcp/connect request
+   * Handle an incoming mcp/connect request
    */
-  handleConnect(request: McpConnectRequest): McpConnectResponse {
-    const { connectionId, url } = request.params;
+  handleConnect(params: Record<string, unknown>): McpConnectResponse {
+    // The protocol uses "acp_url" as the parameter name
+    // Generate connectionId if not provided by conductor
+    const connectionId = (params.connectionId as string) ?? `conn-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const url = (params.acp_url ?? params.url) as string;
 
     const server = this._serversByUrl.get(url);
     if (!server) {
@@ -72,6 +78,10 @@ export class McpOverAcpHandler {
       sessionId: this._sessionId,
     });
 
+    // Include tool definitions in the connect response
+    // The conductor bridge may use this to provide tool info to the agent
+    const tools = server.getToolDefinitions();
+
     return {
       connectionId,
       serverInfo: {
@@ -81,14 +91,18 @@ export class McpOverAcpHandler {
       capabilities: {
         tools: {},
       },
+      // Include tools directly - the bridge may forward this to the agent
+      tools,
     };
   }
 
   /**
-   * Handle an incoming _mcp/message request
+   * Handle an incoming mcp/message request
    */
-  async handleMessage(request: McpMessageRequest): Promise<McpMessageResponse> {
-    const { connectionId, method, params } = request.params;
+  async handleMessage(params: Record<string, unknown>): Promise<McpMessageResponse> {
+    const connectionId = params.connectionId as string;
+    const method = params.method as string;
+    const mcpParams = params.params as unknown;
 
     const connection = this._connections.get(connectionId);
     if (!connection) {
@@ -107,7 +121,7 @@ export class McpOverAcpHandler {
     };
 
     try {
-      const result = await connection.server.handleMethod(method, params, context);
+      const result = await connection.server.handleMethod(method, mcpParams, context);
       return {
         connectionId,
         result,
@@ -125,34 +139,36 @@ export class McpOverAcpHandler {
   }
 
   /**
-   * Handle an incoming _mcp/disconnect notification
+   * Handle an incoming mcp/disconnect notification
    */
-  handleDisconnect(notification: McpDisconnectNotification): void {
-    const { connectionId } = notification.params;
+  handleDisconnect(params: Record<string, unknown>): void {
+    const connectionId = params.connectionId as string;
     this._connections.delete(connectionId);
   }
 
   /**
-   * Check if this is an MCP-over-ACP request
+   * Check if this is an MCP-over-ACP request.
+   * Note: The ACP SDK strips the underscore prefix, so we check for "mcp/".
    */
   isMcpRequest(method: string): boolean {
-    return method.startsWith("_mcp/");
+    return method.startsWith("mcp/");
   }
 
   /**
-   * Route an MCP-over-ACP request to the appropriate handler
+   * Route an MCP-over-ACP request to the appropriate handler.
+   * Note: Methods arrive without the underscore prefix (e.g., "mcp/connect" not "_mcp/connect").
    */
   async routeRequest(
     method: string,
-    params: unknown
+    params: Record<string, unknown>
   ): Promise<unknown> {
     switch (method) {
-      case "_mcp/connect":
-        return this.handleConnect({ method, params } as McpConnectRequest);
-      case "_mcp/message":
-        return this.handleMessage({ method, params } as McpMessageRequest);
-      case "_mcp/disconnect":
-        this.handleDisconnect({ method, params } as McpDisconnectNotification);
+      case "mcp/connect":
+        return this.handleConnect(params);
+      case "mcp/message":
+        return this.handleMessage(params);
+      case "mcp/disconnect":
+        this.handleDisconnect(params);
         return undefined;
       default:
         throw new Error(`Unknown MCP-over-ACP method: ${method}`);

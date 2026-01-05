@@ -37,7 +37,19 @@ This plan implements the `SchemaProvider<T>` interface from [schema-providers.md
 
 Create `examples/` directory with end-to-end examples that demonstrate each schema provider pattern and serve as integration tests.
 
-- [ ] Example 1: Inline schema with `schemaOf<T>()` helper
-- [ ] Example 2: Zod adapter (`zodSchema()`)
-- [ ] Example 3: TypeBox adapter (`typeboxSchema()`)
-- [ ] Example 4: Build-time generated schemas (type-first pattern)
+- [x] Example 1: Inline schema with `schemaOf<T>()` helper
+- [x] Example 2: Zod adapter (`zodSchema()`)
+- [x] Example 3: TypeBox adapter (`typeboxSchema()`)
+- [x] Example 4: Build-time generated schemas (type-first pattern)
+
+## Known Issues
+
+### MCP Bridge Forwarding (Workaround in Place)
+
+The `sacp-conductor` MCP bridge does not forward `_mcp/message` calls to the client, preventing proper MCP tool invocation. See [mcp-forwarding-issue.md](mcp-forwarding-issue.md) for details.
+
+**Current workaround**: `ThinkBuilder` extracts JSON from agent text output when MCP tools are unavailable.
+
+- [ ] Investigate conductor bridge implementation
+- [ ] File issue or PR against sacp-conductor if bug confirmed
+- [ ] Remove JSON extraction workaround once bridge is fixed

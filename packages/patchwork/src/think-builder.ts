@@ -173,6 +173,45 @@ export class ThinkBuilder<Output> {
     });
   }
 
+  /**
+   * Try to extract a JSON object from text that may contain surrounding content.
+   * Returns null if no valid JSON object is found.
+   */
+  private _tryExtractJson(text: string): unknown | null {
+    // First, try to parse the entire text as JSON
+    try {
+      return JSON.parse(text.trim());
+    } catch {
+      // Not pure JSON, try to find JSON within the text
+    }
+
+    // Look for JSON object patterns in the text
+    // Try to find content between first { and last }
+    const firstBrace = text.indexOf("{");
+    const lastBrace = text.lastIndexOf("}");
+
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      const candidate = text.slice(firstBrace, lastBrace + 1);
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        // Not valid JSON
+      }
+    }
+
+    // Try to find JSON in code blocks
+    const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    if (codeBlockMatch) {
+      try {
+        return JSON.parse(codeBlockMatch[1].trim());
+      } catch {
+        // Not valid JSON in code block
+      }
+    }
+
+    return null;
+  }
+
   private async _executeRun(
     resolve: (value: Output) => void,
     reject: (error: Error) => void
@@ -191,9 +230,6 @@ export class ThinkBuilder<Output> {
       }
     }
 
-    // Add return instruction
-    prompt += "\n\nWhen you have the final answer, call the return_result tool with your result.";
-
     // Create the MCP server builder
     const serverBuilder = mcpServer("patchwork");
 
@@ -201,8 +237,18 @@ export class ThinkBuilder<Output> {
     let resultReceived = false;
     let result: Output | undefined;
 
-    // Add the return_result tool
+    // Get the output schema for the return_result tool
     const outputSchema = this._schemaProvider?.toJsonSchema() ?? { type: "object" };
+
+    // Add return instruction with schema details
+    // Note: Claude Code will attempt to use the MCP tool, but due to MCP bridge limitations,
+    // it may fall back to outputting JSON via Bash. We handle both cases.
+    prompt += "\n\nIMPORTANT: Return your answer as a JSON object matching this schema:\n";
+    prompt += "```json\n" + JSON.stringify(outputSchema, null, 2) + "\n```\n";
+    prompt += "\nPreferred: Call the `mcp__patchwork__return_result` MCP tool with the JSON as input.\n";
+    prompt += "Fallback: If the MCP tool is unavailable, output ONLY the raw JSON with no other text.";
+
+    // Add the return_result tool
     serverBuilder.tool(
       "return_result",
       "Return the final result",
@@ -247,19 +293,34 @@ export class ThinkBuilder<Output> {
         // Send the prompt
         await session.sendPrompt(prompt);
 
+        // Track text output for JSON extraction fallback
+        let textBuffer = "";
+
         // Read updates until we get a result or the session ends
         while (!resultReceived) {
           const update = await session.readUpdate();
 
           if (update.type === "stop") {
+            // Before giving up, try to extract JSON from collected text
+            if (!resultReceived && textBuffer) {
+              const extracted = this._tryExtractJson(textBuffer);
+              if (extracted !== null) {
+                result = extracted as Output;
+                resultReceived = true;
+              }
+            }
             if (!resultReceived) {
               reject(new Error("Session ended without returning a result"));
             }
             break;
           }
 
-          // Text updates are ignored (we just wait for tool calls)
-          // Tool calls are handled by the MCP server
+          if (update.type === "text") {
+            textBuffer += update.content;
+          }
+
+          // Tool calls are handled by the MCP server (if bridge works)
+          // tool_use events don't need special handling here
         }
 
         if (resultReceived && result !== undefined) {

@@ -44,7 +44,11 @@ export class ActiveSession {
    * Send a prompt to the agent
    */
   async sendPrompt(content: string): Promise<void> {
-    await this._connection.sendPrompt(this.sessionId, content);
+    const response = await this._connection.sendPrompt(this.sessionId, content);
+    // Push a stop update when the prompt completes
+    if (response.stopReason) {
+      this.pushUpdate({ type: "stop", reason: response.stopReason });
+    }
   }
 
   /**
