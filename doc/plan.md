@@ -44,12 +44,13 @@ Create `examples/` directory with end-to-end examples that demonstrate each sche
 
 ## Known Issues
 
-### MCP Bridge Forwarding (Workaround in Place)
+### MCP Bridge Forwarding (RESOLVED)
 
-The `sacp-conductor` MCP bridge does not forward `_mcp/message` calls to the client, preventing proper MCP tool invocation. See [mcp-forwarding-issue.md](mcp-forwarding-issue.md) for details.
+~~The `sacp-conductor` MCP bridge does not forward `_mcp/message` calls to the client.~~
 
-**Current workaround**: `ThinkBuilder` extracts JSON from agent text output when MCP tools are unavailable.
+**Fixed (2026-01-05)**: The issue was in our `_mcp/message` response format—we were wrapping responses in `{connectionId, result}` but the conductor expects raw MCP results. MCP tools now work correctly.
 
-- [ ] Investigate conductor bridge implementation
-- [ ] File issue or PR against sacp-conductor if bug confirmed
-- [ ] Remove JSON extraction workaround once bridge is fixed
+- [x] Investigate conductor bridge implementation
+- [x] Fix `_mcp/message` response format (return raw MCP results)
+- [x] Update MCP protocol version to 2025-03-26
+- [ ] Remove JSON extraction workaround (kept as fallback for robustness)
