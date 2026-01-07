@@ -145,6 +145,19 @@ export type DocumentAnalysis = z.infer<typeof DocumentAnalysisZod>;
 export const DocumentAnalysisSchema: SchemaProvider<DocumentAnalysis> =
   zodSchema(DocumentAnalysisZod);
 
+// Tool input schema for sentiment analysis
+const SentimentInput = z.object({
+  text: z.string().describe("The text passage to analyze"),
+});
+
+// Tool output schema for sentiment analysis
+const SentimentOutput = z.object({
+  score: z.number().describe("Overall sentiment score"),
+  comparative: z.number().describe("Score normalized by text length"),
+  positive: z.array(z.string()).describe("Positive words found"),
+  negative: z.array(z.string()).describe("Negative words found"),
+});
+
 // =============================================================================
 // Main: Run both examples
 // =============================================================================
@@ -200,10 +213,13 @@ export default async function main() {
       .text(feedback)
 
       // Custom tool: wraps the `sentiment` npm package as an MCP tool
+      // Tool schemas defined with Zod and converted via zodSchema()
       .tool(
         "analyze_sentiment",
         "Analyze the sentiment of a text passage. Returns a score (positive = good, negative = bad) and comparative score normalized by length.",
-        async (input: { text: string }) => {
+        zodSchema(SentimentInput),
+        zodSchema(SentimentOutput),
+        async (input: z.infer<typeof SentimentInput>) => {
           const result = sentimentAnalyzer.analyze(input.text);
           console.log(
             `  Sentiment: score=${result.score}, comparative=${result.comparative.toFixed(3)}`
@@ -214,16 +230,6 @@ export default async function main() {
             positive: result.positive,
             negative: result.negative,
           };
-        },
-        {
-          type: "object",
-          properties: {
-            text: {
-              type: "string",
-              description: "The text passage to analyze",
-            },
-          },
-          required: ["text"],
         }
       )
 

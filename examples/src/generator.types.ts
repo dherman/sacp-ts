@@ -137,3 +137,25 @@ export interface DocumentAnalysis {
   /** A recommendation based on the analysis */
   recommendation: string;
 }
+
+/**
+ * Input for the sentiment analysis tool.
+ */
+export interface SentimentInput {
+  /** The text passage to analyze */
+  text: string;
+}
+
+/**
+ * Output from the sentiment analysis tool.
+ */
+export interface SentimentOutput {
+  /** Overall sentiment score */
+  score: number;
+  /** Score normalized by text length */
+  comparative: number;
+  /** Positive words found */
+  positive: string[];
+  /** Negative words found */
+  negative: string[];
+}

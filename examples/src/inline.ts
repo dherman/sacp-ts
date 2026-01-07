@@ -193,6 +193,26 @@ export default async function main() {
       .tool(
         "analyze_sentiment",
         "Analyze the sentiment of a text passage. Returns a score (positive = good, negative = bad) and comparative score normalized by length.",
+        schemaOf<{ text: string }>({
+          type: "object",
+          properties: {
+            text: {
+              type: "string",
+              description: "The text passage to analyze",
+            },
+          },
+          required: ["text"],
+        }),
+        schemaOf<{ score: number; comparative: number; positive: string[]; negative: string[] }>({
+          type: "object",
+          properties: {
+            score: { type: "number", description: "Overall sentiment score" },
+            comparative: { type: "number", description: "Score normalized by text length" },
+            positive: { type: "array", items: { type: "string" }, description: "Positive words found" },
+            negative: { type: "array", items: { type: "string" }, description: "Negative words found" },
+          },
+          required: ["score", "comparative", "positive", "negative"],
+        }),
         async (input: { text: string }) => {
           const result = sentimentAnalyzer.analyze(input.text);
           console.log(
@@ -204,16 +224,6 @@ export default async function main() {
             positive: result.positive,
             negative: result.negative,
           };
-        },
-        {
-          type: "object",
-          properties: {
-            text: {
-              type: "string",
-              description: "The text passage to analyze",
-            },
-          },
-          required: ["text"],
         }
       )
 

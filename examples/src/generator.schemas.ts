@@ -18,6 +18,8 @@ import type {
   UserProfile,
   DocumentSection,
   DocumentAnalysis,
+  SentimentInput,
+  SentimentOutput,
 } from "./generator.types.js";
 
 /**
@@ -293,6 +295,65 @@ export const DocumentAnalysisSchema: SchemaProvider<DocumentAnalysis> = schemaPr
       "overallTone",
       "sections",
       "recommendation"
+    ],
+    "type": "object"
+  });
+
+/**
+ * SchemaProvider for SentimentInput type.
+ * @generated
+ */
+export const SentimentInputSchema: SchemaProvider<SentimentInput> = schemaProvider<SentimentInput>({
+    "additionalProperties": false,
+    "description": "Input for the sentiment analysis tool.",
+    "properties": {
+      "text": {
+        "description": "The text passage to analyze",
+        "type": "string"
+      }
+    },
+    "required": [
+      "text"
+    ],
+    "type": "object"
+  });
+
+/**
+ * SchemaProvider for SentimentOutput type.
+ * @generated
+ */
+export const SentimentOutputSchema: SchemaProvider<SentimentOutput> = schemaProvider<SentimentOutput>({
+    "additionalProperties": false,
+    "description": "Output from the sentiment analysis tool.",
+    "properties": {
+      "comparative": {
+        "description": "Score normalized by text length",
+        "type": "number"
+      },
+      "negative": {
+        "description": "Negative words found",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "positive": {
+        "description": "Positive words found",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "score": {
+        "description": "Overall sentiment score",
+        "type": "number"
+      }
+    },
+    "required": [
+      "score",
+      "comparative",
+      "positive",
+      "negative"
     ],
     "type": "object"
   });

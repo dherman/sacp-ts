@@ -178,3 +178,98 @@ describe("outputSchema deprecation", () => {
     }
   });
 });
+
+describe("Tool schema integration", () => {
+  it("should create SchemaProvider for tool input using schemaOf", () => {
+    interface SearchInput {
+      query: string;
+      limit?: number;
+    }
+
+    const inputSchema: JsonSchema = {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        limit: { type: "number" },
+      },
+      required: ["query"],
+    };
+
+    const provider: SchemaProvider<SearchInput> = schemaOf<SearchInput>(inputSchema);
+
+    // Verify the schema is preserved
+    const result = provider.toJsonSchema();
+    assert.deepStrictEqual(result, inputSchema);
+    assert.strictEqual(result.type, "object");
+    assert.deepStrictEqual(result.required, ["query"]);
+  });
+
+  it("should support tool input schemas with descriptions", () => {
+    interface SentimentInput {
+      text: string;
+    }
+
+    const inputSchema: JsonSchema = {
+      type: "object",
+      properties: {
+        text: {
+          type: "string",
+          description: "The text passage to analyze",
+        },
+      },
+      required: ["text"],
+    };
+
+    const provider = schemaOf<SentimentInput>(inputSchema);
+    const result = provider.toJsonSchema();
+
+    assert.strictEqual(
+      (result.properties?.text as JsonSchema).description,
+      "The text passage to analyze"
+    );
+  });
+
+  it("should work with complex tool input schemas", () => {
+    interface FilterInput {
+      field: string;
+      operator: "eq" | "gt" | "lt" | "contains";
+      value: string | number;
+      caseSensitive?: boolean;
+    }
+
+    const inputSchema: JsonSchema = {
+      type: "object",
+      properties: {
+        field: { type: "string" },
+        operator: {
+          type: "string",
+          enum: ["eq", "gt", "lt", "contains"],
+        },
+        value: {
+          oneOf: [{ type: "string" }, { type: "number" }],
+        },
+        caseSensitive: { type: "boolean" },
+      },
+      required: ["field", "operator", "value"],
+    };
+
+    const provider: SchemaProvider<FilterInput> = schemaOf<FilterInput>(inputSchema);
+    const result = provider.toJsonSchema();
+
+    assert.deepStrictEqual(
+      (result.properties?.operator as JsonSchema).enum,
+      ["eq", "gt", "lt", "contains"]
+    );
+    assert.ok((result.properties?.value as JsonSchema).oneOf);
+  });
+
+  it("should allow default empty schema for tools without input", () => {
+    // Simulates what ThinkBuilder does when no inputSchema is provided
+    const defaultProvider: SchemaProvider<unknown> = {
+      toJsonSchema: () => ({ type: "object" }),
+    };
+
+    const result = defaultProvider.toJsonSchema();
+    assert.deepStrictEqual(result, { type: "object" });
+  });
+});

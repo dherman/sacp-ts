@@ -16,8 +16,8 @@ interface ToolDefinition<I = unknown, O = unknown> {
   name: string;
   description: string;
   handler: (input: I) => Promise<O>;
-  inputSchema: JsonSchema;
-  outputSchema: JsonSchema;
+  inputSchema: SchemaProvider<I>;
+  outputSchema: SchemaProvider<O>;
   includeInPrompt: boolean;
 }
 
@@ -83,19 +83,65 @@ export class ThinkBuilder<Output> {
    *
    * The tool will be mentioned in the prompt text to help the LLM
    * understand that it's available.
+   *
+   * @param name - The tool name
+   * @param description - A description of what the tool does
+   * @param inputSchema - A SchemaProvider describing the expected input structure (or undefined for no input)
+   * @param outputSchema - A SchemaProvider describing the output structure (or undefined for untyped output)
+   * @param handler - The function to execute when the tool is called
+   *
+   * @example
+   * ```typescript
+   * import { schemaOf } from "@dherman/patchwork";
+   *
+   * interface SearchInput {
+   *   query: string;
+   *   limit?: number;
+   * }
+   *
+   * interface SearchResult {
+   *   matches: string[];
+   *   total: number;
+   * }
+   *
+   * patchwork.think(outputSchema)
+   *   .tool(
+   *     "search",
+   *     "Search for documents",
+   *     schemaOf<SearchInput>({
+   *       type: "object",
+   *       properties: {
+   *         query: { type: "string" },
+   *         limit: { type: "number" }
+   *       },
+   *       required: ["query"]
+   *     }),
+   *     schemaOf<SearchResult>({
+   *       type: "object",
+   *       properties: {
+   *         matches: { type: "array", items: { type: "string" } },
+   *         total: { type: "number" }
+   *       },
+   *       required: ["matches", "total"]
+   *     }),
+   *     async (input: SearchInput) => { ... }
+   *   )
+   *   .run();
+   * ```
    */
   tool<I, O>(
     name: string,
     description: string,
-    handler: (input: I) => Promise<O>,
-    inputSchema?: JsonSchema
+    inputSchema: SchemaProvider<I> | undefined,
+    outputSchema: SchemaProvider<O> | undefined,
+    handler: (input: I) => Promise<O>
   ): this {
     this._tools.set(name, {
       name,
       description,
       handler: handler as (input: unknown) => Promise<unknown>,
-      inputSchema: inputSchema ?? { type: "object" },
-      outputSchema: { type: "object" },
+      inputSchema: inputSchema ?? { toJsonSchema: () => ({ type: "object" }) },
+      outputSchema: outputSchema ?? { toJsonSchema: () => ({ type: "object" }) },
       includeInPrompt: true,
     });
     return this;
@@ -106,19 +152,26 @@ export class ThinkBuilder<Output> {
    *
    * Use this for tools that should be available but don't need
    * to be explicitly mentioned in the prompt.
+   *
+   * @param name - The tool name
+   * @param description - A description of what the tool does
+   * @param inputSchema - A SchemaProvider describing the expected input structure (or undefined for no input)
+   * @param outputSchema - A SchemaProvider describing the output structure (or undefined for untyped output)
+   * @param handler - The function to execute when the tool is called
    */
   defineTool<I, O>(
     name: string,
     description: string,
-    handler: (input: I) => Promise<O>,
-    inputSchema?: JsonSchema
+    inputSchema: SchemaProvider<I> | undefined,
+    outputSchema: SchemaProvider<O> | undefined,
+    handler: (input: I) => Promise<O>
   ): this {
     this._tools.set(name, {
       name,
       description,
       handler: handler as (input: unknown) => Promise<unknown>,
-      inputSchema: inputSchema ?? { type: "object" },
-      outputSchema: { type: "object" },
+      inputSchema: inputSchema ?? { toJsonSchema: () => ({ type: "object" }) },
+      outputSchema: outputSchema ?? { toJsonSchema: () => ({ type: "object" }) },
       includeInPrompt: false,
     });
     return this;
@@ -222,8 +275,8 @@ export class ThinkBuilder<Output> {
       serverBuilder.tool(
         tool.name,
         tool.description,
-        tool.inputSchema,
-        tool.outputSchema,
+        tool.inputSchema.toJsonSchema(),
+        tool.outputSchema.toJsonSchema(),
         async (input: unknown, _context) => {
           return tool.handler(input);
         }
