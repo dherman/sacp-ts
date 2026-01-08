@@ -108,17 +108,6 @@ export type AnalysisResult = z.infer<typeof AnalysisResultZod>;
 export const AnalysisResultSchema: SchemaProvider<AnalysisResult> =
   zodSchema(AnalysisResultZod);
 
-// Example with optional fields and defaults
-export const ConfigZod = z.object({
-  temperature: z.number().min(0).max(2).default(0.7),
-  maxTokens: z.number().int().positive().optional(),
-  systemPrompt: z.string().optional(),
-});
-
-export type Config = z.infer<typeof ConfigZod>;
-
-export const ConfigSchema: SchemaProvider<Config> = zodSchema(ConfigZod);
-
 // =============================================================================
 // Example 2: Document analysis with custom tool
 // =============================================================================

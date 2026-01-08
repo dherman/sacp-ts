@@ -6,7 +6,6 @@ import {
   SummarySchema,
   SummaryZod,
   AnalysisResultSchema,
-  ConfigSchema,
 } from "./zod.js";
 
 describe("Example 2: Zod adapter (zodSchema)", () => {
@@ -126,25 +125,6 @@ describe("Example 2: Zod adapter (zodSchema)", () => {
         "negative",
         "neutral",
       ]);
-    });
-  });
-
-  describe("ConfigSchema with optionals", () => {
-    it("should handle optional fields", () => {
-      const schema = ConfigSchema.toJsonSchema();
-
-      // Optional fields should not be in required array
-      const required = schema.required as string[] | undefined;
-      if (required) {
-        assert.ok(!required.includes("maxTokens"));
-        assert.ok(!required.includes("systemPrompt"));
-      }
-    });
-
-    it("should include default values in schema", () => {
-      const schema = ConfigSchema.toJsonSchema();
-
-      assert.strictEqual(schema.properties?.temperature.default, 0.7);
     });
   });
 

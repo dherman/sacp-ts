@@ -8,7 +8,7 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "test": "node --test --import tsx src/**/*.test.ts",
-    "generate:schemas": "tsx scripts/generate-schemas.ts",
+    "generate:schemas": "build-schema-providers src/generator.ts",
     "demo": "tsx src/demo.ts",
     "demo:inline": "tsx src/demo.ts inline",
     "demo:zod": "tsx src/demo.ts zod",
@@ -22,11 +22,11 @@
     "sentiment": "^5.0.2"
   },
   "devDependencies": {
+    "@dherman/build-schema-providers": "workspace:*",
     "@sinclair/typebox": "^0.34.30",
     "@types/node": "^24.10.4",
     "@types/sentiment": "^5.0.4",
     "prettier": "^3.7.4",
-    "ts-json-schema-generator": "^2.4.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "zod": "^3.24.2",

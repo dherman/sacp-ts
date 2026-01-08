@@ -104,30 +104,6 @@ export type AnalysisResult = Static<typeof AnalysisResultTypeBox>;
 export const AnalysisResultSchema: SchemaProvider<AnalysisResult> =
   typeboxSchema(AnalysisResultTypeBox);
 
-// Example with optional fields
-export const ConfigTypeBox = Type.Object({
-  temperature: Type.Number({ minimum: 0, maximum: 2, default: 0.7 }),
-  maxTokens: Type.Optional(Type.Integer({ minimum: 1 })),
-  systemPrompt: Type.Optional(Type.String()),
-});
-
-export type Config = Static<typeof ConfigTypeBox>;
-
-export const ConfigSchema: SchemaProvider<Config> = typeboxSchema(ConfigTypeBox);
-
-// Example demonstrating TypeBox's built-in JSON Schema formats
-export const UserProfileTypeBox = Type.Object({
-  id: Type.String({ format: "uuid" }),
-  email: Type.String({ format: "email" }),
-  website: Type.Optional(Type.String({ format: "uri" })),
-  createdAt: Type.String({ format: "date-time" }),
-});
-
-export type UserProfile = Static<typeof UserProfileTypeBox>;
-
-export const UserProfileSchema: SchemaProvider<UserProfile> =
-  typeboxSchema(UserProfileTypeBox);
-
 // =============================================================================
 // Example 2: Document analysis with custom tool
 // =============================================================================

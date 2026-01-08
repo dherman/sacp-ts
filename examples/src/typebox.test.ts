@@ -7,8 +7,6 @@ import {
   SummarySchema,
   SummaryTypeBox,
   AnalysisResultSchema,
-  ConfigSchema,
-  UserProfileSchema,
 } from "./typebox.js";
 
 describe("Example 3: TypeBox adapter (typeboxSchema)", () => {
@@ -131,35 +129,6 @@ describe("Example 3: TypeBox adapter (typeboxSchema)", () => {
 
       // TypeBox represents unions with anyOf
       assert.ok(schema.properties?.sentiment.anyOf);
-    });
-  });
-
-  describe("ConfigSchema with optionals", () => {
-    it("should handle optional fields", () => {
-      const schema = ConfigSchema.toJsonSchema();
-
-      // Optional fields should not be in required array
-      const required = schema.required as string[] | undefined;
-      if (required) {
-        assert.ok(!required.includes("maxTokens"));
-        assert.ok(!required.includes("systemPrompt"));
-      }
-    });
-
-    it("should include default values in schema", () => {
-      const schema = ConfigSchema.toJsonSchema();
-
-      assert.strictEqual(schema.properties?.temperature.default, 0.7);
-    });
-  });
-
-  describe("UserProfileSchema with formats", () => {
-    it("should include format specifications", () => {
-      const schema = UserProfileSchema.toJsonSchema();
-
-      assert.strictEqual(schema.properties?.id.format, "uuid");
-      assert.strictEqual(schema.properties?.email.format, "email");
-      assert.strictEqual(schema.properties?.createdAt.format, "date-time");
     });
   });
 

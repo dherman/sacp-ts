@@ -5,12 +5,13 @@
  * code generation to create JSON Schemas from TypeScript types.
  *
  * Workflow:
- * 1. Define your types in generator.types.ts with JSDoc annotations
+ * 1. Define your types here with JSDoc annotations (including @JSONSchema)
  * 2. Run: pnpm generate:schemas
  * 3. Import generated SchemaProviders from generator.schemas.ts
  *
- * The generator script (scripts/generate-schemas.ts) uses ts-json-schema-generator
- * to create a TypeScript module with SchemaProvider<T> exports for each type.
+ * The build tool (@dherman/build-schema-providers) uses ts-json-schema-generator
+ * to create a TypeScript module with SchemaProvider<T> exports for each type
+ * marked with @JSONSchema.
  *
  * Best for:
  * - Type-first development (TypeScript types are the source of truth)
@@ -18,23 +19,117 @@
  * - Teams that prefer to avoid runtime schema libraries
  * - CI/CD pipelines that validate schema freshness
  *
+ * JSDoc annotations supported:
+ * - @JSONSchema - marks a type for schema generation
+ * - @minimum, @maximum - numeric constraints
+ * - @default - default values
+ * - @format - string formats (email, uuid, uri, date-time, etc.)
+ * - @pattern - regex patterns
+ * - @minLength, @maxLength - string length constraints
+ *
  * This file shows two use cases:
  * 1. Simple prompt without tools (summarization)
  * 2. Prompt with a custom tool (sentiment analysis using an npm package)
  */
 
-import type { Summary, DocumentAnalysis, TextPassage } from "./generator.types.js";
 import { SummarySchema, DocumentAnalysisSchema, TextPassageSchema } from "./generator.schemas.js";
 import * as fs from "fs/promises";
 import connect from "./base-agent.js";
 import Sentiment from "sentiment";
 
-// Initialize the sentiment analyzer (from the `sentiment` npm package)
-const sentimentAnalyzer = new Sentiment();
+// =============================================================================
+// Type Definitions (marked with @JSONSchema for schema generation)
+// =============================================================================
+
+/**
+ * A summary of content.
+ * @JSONSchema
+ */
+export interface Summary {
+  /** A brief title for the summary */
+  title: string;
+  /** Key points from the content */
+  points: string[];
+  /**
+   * Approximate word count of the original content
+   * @minimum 0
+   */
+  wordCount: number;
+}
+
+/**
+ * Result of sentiment analysis.
+ * @JSONSchema
+ */
+export interface AnalysisResult {
+  /** Overall sentiment of the content */
+  sentiment: "positive" | "negative" | "neutral";
+  /**
+   * Confidence score between 0 and 1
+   * @minimum 0
+   * @maximum 1
+   */
+  confidence: number;
+  /** Topics identified in the content */
+  topics: Topic[];
+}
+
+/**
+ * A topic with its relevance score.
+ * @JSONSchema
+ */
+export interface Topic {
+  /** The topic name */
+  name: string;
+  /**
+   * Relevance score between 0 and 1
+   * @minimum 0
+   * @maximum 1
+   */
+  relevance: number;
+}
+
+/**
+ * A section of a document with its sentiment analysis.
+ * @JSONSchema
+ */
+export interface DocumentSection {
+  /** The section title */
+  title: string;
+  /** The sentiment score from the analysis tool */
+  sentimentScore: number;
+  /** A brief summary of the section */
+  summary: string;
+}
+
+/**
+ * Analysis of a document's sentiment and content.
+ * @JSONSchema
+ */
+export interface DocumentAnalysis {
+  /** The overall emotional tone of the document */
+  overallTone: "positive" | "negative" | "mixed" | "neutral";
+  /** Analysis of each section */
+  sections: DocumentSection[];
+  /** A recommendation based on the analysis */
+  recommendation: string;
+}
+
+/**
+ * A text passage to analyze.
+ * @JSONSchema
+ */
+export interface TextPassage {
+  /** The text passage to analyze */
+  text: string;
+}
 
 // =============================================================================
-// Main: Run both examples
+// Demo Implementation
 // =============================================================================
+
+// Initialize the sentiment analyzer (from the `sentiment` npm package)
+const sentimentAnalyzer = new Sentiment();
 
 export default async function main() {
   const agent = await connect();
@@ -87,7 +182,7 @@ export default async function main() {
       .text(feedback)
 
       // Custom tool: wraps the `sentiment` npm package as an MCP tool
-      // Tool input schema generated from TextPassage type in generator.types.ts
+      // Tool input schema generated from TextPassage type
       .tool(
         "analyze_sentiment",
         "Analyze the sentiment of a text passage. Returns a score (positive = good, negative = bad) and comparative score normalized by length.",
