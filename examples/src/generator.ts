@@ -150,7 +150,7 @@ export default async function main() {
     const summary: Summary = await agent
       .think(SummarySchema)
       .text("Please summarize the following content:\n\n")
-      .display(content)
+      .quote(content)
       .run();
 
     console.log(`Title: ${summary.title}`);
@@ -180,7 +180,7 @@ export default async function main() {
         then provide an overall analysis with recommendations.
 
       `)
-      .text(feedback)
+      .quote(feedback, "feedback")
 
       // Custom tool: wraps the `sentiment` npm package as an MCP tool
       // Tool input schema generated from TextPassage type

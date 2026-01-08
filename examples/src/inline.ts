@@ -158,7 +158,7 @@ export default async function main() {
     const summary = await agent
       .think(SummarySchema)
       .text("Please summarize the following content:\n\n")
-      .display(content)
+      .quote(content)
       .run();
 
     console.log(`Title: ${summary.title}`);
@@ -182,12 +182,13 @@ export default async function main() {
 
     const analysis = await agent
       .think(DocumentAnalysisSchema)
-      .text(
-        "Analyze the following customer feedback document. " +
-          "Use the sentiment analysis tool to measure the emotional tone of each section, " +
-          "then provide an overall analysis with recommendations.\n\n"
-      )
-      .text(feedback)
+      .text(`
+        Analyze the following customer feedback document.
+        Use the sentiment analysis tool to measure the emotional tone of each section,
+        then provide an overall analysis with recommendations.
+
+      `)
+      .quote(feedback, "feedback")
 
       // Custom tool: wraps the `sentiment` npm package as an MCP tool
       .tool(

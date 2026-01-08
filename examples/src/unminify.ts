@@ -146,7 +146,7 @@ export default async function main() {
         The code should end with a default export of the main library object.
 
       `)
-      .display(prettyCode)
+      .code(prettyCode, "javascript")
       .run();
 
     console.log(`Exported as: ${conversion.exportedName}`);
@@ -166,7 +166,7 @@ export default async function main() {
         (1-2 character) names that appear to be minified.
 
       `)
-      .display(esmCode)
+      .code(esmCode, "javascript")
       .run();
 
     console.log(`Found ${functionList.functions.length} functions to analyze\n`);
@@ -214,7 +214,7 @@ export default async function main() {
           Here is the full code for context:
 
         `)
-        .display(esmCode)
+        .code(esmCode, "javascript")
         .run();
 
       // Process results and track which functions were analyzed
@@ -282,7 +282,7 @@ export default async function main() {
         Here is the code:
 
       `)
-      .display(esmCode)
+      .code(esmCode, "javascript")
       .run();
 
     const finalCode = await formatCode(renamed.code);

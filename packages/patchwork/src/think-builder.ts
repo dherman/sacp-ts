@@ -66,7 +66,31 @@ export class ThinkBuilder<Output> {
   }
 
   /**
+   * Quote some content delimited by XML-style tags.
+   */
+  quote(content: string, tag: string = "quote"): this {
+    if (!content.includes("\n")) {
+      this._promptParts.push(`<${tag}>${content}</${tag}>\n`);
+    } else {
+      this._promptParts.push(
+        `<${tag}>\n${content}\n</${tag}>\n`
+      );
+    }
+    return this;
+  }
+
+  /**
+   * Quote some content as a Markdown-style code block.
+   */
+  code(content: string, language: string = ""): this {
+    this._promptParts.push(`\`\`\`${language}\n${content}\n\`\`\`\n`);
+    return this;
+  }
+
+  /**
    * Interpolate a value using toString()
+   *
+   * @deprecated Use `text()` or `quote()` instead for clearer intent.
    */
   display(value: unknown): this {
     const text = value === null || value === undefined

@@ -162,7 +162,7 @@ export default async function main() {
     const summary = await agent
       .think(SummarySchema)
       .text("Please summarize the following content:\n\n")
-      .display(content)
+      .quote(content)
       .run();
 
     console.log(`Title: ${summary.title}`);
@@ -191,7 +191,7 @@ export default async function main() {
           "Use the sentiment analysis tool to measure the emotional tone of each section, " +
           "then provide an overall analysis with recommendations.\n\n"
       )
-      .text(feedback)
+      .quote(feedback, "feedback")
 
       // Custom tool: wraps the `sentiment` npm package as an MCP tool
       // Tool input schema defined with Zod and converted via zodSchema()
