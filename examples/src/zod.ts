@@ -23,8 +23,10 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import type { SchemaProvider, JsonSchema } from "@dherman/sacp";
 import * as fs from "fs/promises";
-import connect from "./base-agent.js";
+import Connector from "./connector.js";
 import Sentiment from "sentiment";
+
+const connector = new Connector();
 
 /**
  * Creates a SchemaProvider from a Zod schema.
@@ -144,7 +146,7 @@ const TextPassage = z.object({
 // =============================================================================
 
 export default async function main() {
-  const agent = await connect();
+  const agent = await connector.connect();
 
   try {
     // -------------------------------------------------------------------------

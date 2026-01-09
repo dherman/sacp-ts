@@ -34,8 +34,10 @@
 
 import { SummarySchema, DocumentAnalysisSchema, TextPassageSchema } from "./generator.schemas.js";
 import * as fs from "fs/promises";
-import connect from "./base-agent.js";
+import Connector from "./connector.js"
 import Sentiment from "sentiment";
+
+const connector = new Connector();
 
 // =============================================================================
 // Type Definitions (marked with @JSONSchema for schema generation)
@@ -132,7 +134,7 @@ export interface TextPassage {
 const sentimentAnalyzer = new Sentiment();
 
 export default async function main() {
-  const agent = await connect();
+  const agent = await connector.connect();
 
   try {
     // -------------------------------------------------------------------------

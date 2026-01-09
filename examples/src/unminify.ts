@@ -19,9 +19,11 @@ import {
   FunctionAnalysisBatchSchema,
   RenamedCodeSchema,
 } from "./unminify.schemas.js";
-import connect from "./base-agent.js";
+import Connector from "./connector.js";
 import * as fs from "fs/promises";
 import * as prettier from "prettier";
+
+const connector = new Connector();
 
 // =============================================================================
 // Type Definitions (marked with @JSONSchema for schema generation)
@@ -114,7 +116,7 @@ export async function formatCode(code: string): Promise<string> {
 // =============================================================================
 
 export default async function main() {
-  const agent = await connect();
+  const agent = await connector.connect();
 
   try {
     // Read the minified input file

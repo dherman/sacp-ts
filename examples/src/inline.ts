@@ -16,9 +16,11 @@
 
 import { schemaOf } from "@dherman/patchwork";
 import type { SchemaProvider } from "@dherman/sacp";
-import connect from "./base-agent.js";
+import Connector from "./connector.js";
 import * as fs from "fs/promises";
 import Sentiment from "sentiment";
+
+const connector = new Connector();
 
 // =============================================================================
 // Example 1: Simple summarization (no tools)
@@ -140,7 +142,7 @@ const DocumentAnalysisSchema: SchemaProvider<DocumentAnalysis> =
 // =============================================================================
 
 export default async function main() {
-  const agent = await connect();
+  const agent = await connector.connect();
 
   try {
     // -------------------------------------------------------------------------
