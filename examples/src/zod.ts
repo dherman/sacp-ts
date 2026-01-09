@@ -23,10 +23,10 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import type { SchemaProvider, JsonSchema } from "@dherman/sacp";
 import * as fs from "fs/promises";
-import Connector from "./connector.js";
 import Sentiment from "sentiment";
+import { Agent } from "@dherman/patchwork";
 
-const connector = new Connector();
+const DEFAULT_AGENT_CMD = "npx -y @zed-industries/claude-code-acp";
 
 /**
  * Creates a SchemaProvider from a Zod schema.
@@ -146,7 +146,7 @@ const TextPassage = z.object({
 // =============================================================================
 
 export default async function main() {
-  const agent = await connector.connect();
+  const agent = await Agent.connect(process.env.PATCHWORK_AGENT_CMD ?? DEFAULT_AGENT_CMD);
 
   try {
     // -------------------------------------------------------------------------

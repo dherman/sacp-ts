@@ -34,10 +34,10 @@
 
 import { SummarySchema, DocumentAnalysisSchema, TextPassageSchema } from "./generator.schemas.js";
 import * as fs from "fs/promises";
-import Connector from "./connector.js"
 import Sentiment from "sentiment";
+import { Agent } from "@dherman/patchwork";
 
-const connector = new Connector();
+const DEFAULT_AGENT_CMD = "npx -y @zed-industries/claude-code-acp";
 
 // =============================================================================
 // Type Definitions (marked with @JSONSchema for schema generation)
@@ -134,7 +134,7 @@ export interface TextPassage {
 const sentimentAnalyzer = new Sentiment();
 
 export default async function main() {
-  const agent = await connector.connect();
+  const agent = await Agent.connect(process.env.PATCHWORK_AGENT_CMD ?? DEFAULT_AGENT_CMD);
 
   try {
     // -------------------------------------------------------------------------
