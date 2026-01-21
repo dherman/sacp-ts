@@ -21,6 +21,8 @@ import {
 } from "./unminify.schemas.js";
 import * as fs from "fs/promises";
 import * as prettier from "prettier";
+import pLimit from "p-limit";
+import _ from "lodash";
 import DEFAULT_AGENT_CMD from "./claude-code.json" with { type: "json" };
 import { Agent } from "@dherman/patchwork";
 
@@ -122,6 +124,8 @@ export default async function main() {
     const inputPath = new URL("../data/underscore-umd-min.js", import.meta.url);
     const outputPath = new URL("../data/underscore.js", import.meta.url);
 
+    const startTime = Date.now();
+
     console.log("=== Unminify Demo ===\n");
     console.log("Reading minified code...");
     const minifiedCode = await fs.readFile(inputPath, "utf-8");
@@ -133,6 +137,8 @@ export default async function main() {
     console.log("Step 1: Pretty-printing with Prettier...");
     const prettyCode = await formatCode(minifiedCode);
     console.log(`Pretty-printed: ${prettyCode.split("\n").length} lines\n`);
+
+    const step1EndTime = Date.now();
 
     // -------------------------------------------------------------------------
     // Step 2: Convert UMD to ESM
@@ -154,6 +160,8 @@ export default async function main() {
     const esmCode = await formatCode(conversion.code);
     console.log(`ESM module: ${esmCode.split("\n").length} lines\n`);
 
+    const step2EndTime = Date.now();
+
     // -------------------------------------------------------------------------
     // Step 3: Extract function list
     // -------------------------------------------------------------------------
@@ -172,96 +180,61 @@ export default async function main() {
 
     console.log(`Found ${functionList.functions.length} functions to analyze\n`);
 
+    const step3EndTime = Date.now();
+
     // -------------------------------------------------------------------------
-    // Step 4: Analyze functions in batches
+    // Step 4: Analyze functions in batches (parallel with concurrency limit)
     // -------------------------------------------------------------------------
     console.log("Step 4: Analyzing functions in batches...");
     const renames: Map<string, string> = new Map();
-    const analyzed: Set<string> = new Set();
-    const retryCount: Map<string, number> = new Map();
-    const CHUNK_SIZE = 30;
-    const MAX_RETRIES = 3;
 
-    // Process all functions, tracking which ones still need analysis
-    let remaining = [...functionList.functions];
-    let batchNum = 0;
+    const limit = pLimit(5);
+    const batches = _.chunk(functionList.functions, 30);
 
-    while (remaining.length > 0) {
-      batchNum++;
-      const chunk = remaining.slice(0, CHUNK_SIZE);
-      remaining = remaining.slice(CHUNK_SIZE);
+    console.log(`  Processing ${batches.length} batches...`);
 
-      console.log(
-        `  Batch ${batchNum}: analyzing ${chunk.length} functions (${remaining.length} remaining after this batch)...`
-      );
+    const results = await Promise.all(
+      batches.map((batch) =>
+        limit(async () => {
+          const functionListText = batch
+            .map((f) => `  - "${f.name}" with signature ${f.signature}`)
+            .join("\n");
 
-      const functionListText = chunk
-        .map((f) => `  - "${f.name}" with signature ${f.signature}`)
-        .join("\n");
+          return agent
+            .think(FunctionAnalysisBatchSchema)
+            .text(`
+              Analyze each of the following minified functions and suggest better, more descriptive names.
 
-      const batch: FunctionAnalysisBatch = await agent
-        .think(FunctionAnalysisBatchSchema)
-        .text(`
-          Analyze each of the following minified functions and suggest better, more descriptive names.
+              IMPORTANT: For each function, the 'originalName' field in your response must be the EXACT
+              minified name shown in quotes below (e.g., if the function is listed as "j", use exactly "j"
+              as the originalName, not "jj" or any variation).
 
-          IMPORTANT: For each function, the 'originalName' field in your response must be the EXACT
-          minified name shown in quotes below (e.g., if the function is listed as "j", use exactly "j"
-          as the originalName, not "jj" or any variation).
+              Functions to analyze:
 
-          Functions to analyze:
+              ${functionListText}
 
-          ${functionListText}
+              Here is the full code for context:
 
-          Here is the full code for context:
+            `)
+            .code(esmCode, "javascript")
+            .run();
+        })
+      )
+    );
 
-        `)
-        .code(esmCode, "javascript")
-        .run();
-
-      // Process results and track which functions were analyzed
+    // Collect all renames
+    for (const batch of results) {
       for (const analysis of batch.analyses) {
-        if (!analyzed.has(analysis.originalName)) {
-          analyzed.add(analysis.originalName);
-          if (analysis.suggestedName !== analysis.originalName) {
-            renames.set(analysis.originalName, analysis.suggestedName);
-            console.log(
-              `    ${analysis.originalName} → ${analysis.suggestedName} (${analysis.confidence})`
-            );
-          }
-        }
-      }
-
-      // Check for any functions that were missed and add them back to remaining (with retry limit)
-      const missed = chunk.filter((f) => !analyzed.has(f.name));
-      if (missed.length > 0) {
-        const toRetry: FunctionInfo[] = [];
-        const gaveUp: string[] = [];
-
-        for (const f of missed) {
-          const count = (retryCount.get(f.name) ?? 0) + 1;
-          retryCount.set(f.name, count);
-          if (count < MAX_RETRIES) {
-            toRetry.push(f);
-          } else {
-            gaveUp.push(f.name);
-          }
-        }
-
-        if (toRetry.length > 0) {
-          console.log(
-            `    ${toRetry.length} functions missed, will retry: ${toRetry.map((f) => f.name).join(", ")}`
-          );
-          remaining.push(...toRetry);
-        }
-        if (gaveUp.length > 0) {
-          console.log(
-            `    Giving up on ${gaveUp.length} functions after ${MAX_RETRIES} retries: ${gaveUp.join(", ")}`
-          );
+        if (analysis.suggestedName !== analysis.originalName) {
+          renames.set(analysis.originalName, analysis.suggestedName);
+          console.log(`  ${analysis.originalName} → ${analysis.suggestedName}`);
         }
       }
     }
 
     console.log(`\nIdentified ${renames.size} renames\n`);
+
+    const step4EndTime = Date.now();
 
     // -------------------------------------------------------------------------
     // Step 5: Apply renames
@@ -289,6 +262,8 @@ export default async function main() {
     const finalCode = await formatCode(renamed.code);
     console.log(`Applied ${renamed.renameCount} renames\n`);
 
+    const step5EndTime = Date.now();
+
     // -------------------------------------------------------------------------
     // Write output
     // -------------------------------------------------------------------------
@@ -298,6 +273,14 @@ export default async function main() {
     console.log(`Final size: ${finalCode.length} characters, ${finalCode.split("\n").length} lines`);
 
     console.log("\n=== Done! ===");
+
+    console.log("\n=== Timing Summary ===");
+    console.log(`  Step 1 (Pretty-print):       ${(step1EndTime - startTime) / 1000}s`);
+    console.log(`  Step 2 (UMD to ESM):        ${(step2EndTime - step1EndTime) / 1000}s`);
+    console.log(`  Step 3 (Extract functions): ${(step3EndTime - step2EndTime) / 1000}s`);
+    console.log(`  Step 4 (Analyze functions): ${(step4EndTime - step3EndTime) / 1000}s`);
+    console.log(`  Step 5 (Apply renames):     ${(step5EndTime - step4EndTime) / 1000}s`);
+    console.log(`  Total time:                 ${(step5EndTime - startTime) / 1000}s`);
   } finally {
     agent.close();
   }

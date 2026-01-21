@@ -41,9 +41,6 @@ async function main() {
   const args = process.argv.slice(2);
   const pattern = args[0] || "all";
 
-  console.log("SchemaProvider Demo");
-  console.log("===================\n");
-
   if (pattern === "all") {
     // Run all patterns
     for (const demo of [inline, zod, typebox, generator]) {
