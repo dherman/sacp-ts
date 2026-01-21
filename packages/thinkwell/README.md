@@ -7,24 +7,30 @@ A TypeScript library for easy scripting of AI agents. Thinkwell provides a fluen
 ## Quick Start
 
 ```typescript
-import { Agent, schemaOf } from "thinkwell";
+import { Agent } from "thinkwell";
+import { GreetingSchema } from "./schemas.js";
+
+/**
+ * A greeting response.
+ * @JSONSchema
+ */
+export interface Greeting {
+  /** The greeting message */
+  message: string;
+}
 
 const agent = await Agent.connect("npx -y @zed-industries/claude-code-acp");
 
 const result = await agent
-  .think(schemaOf<{ greeting: string }>({
-    type: "object",
-    properties: { greeting: { type: "string" } },
-    required: ["greeting"]
-  }))
+  .think(GreetingSchema)
   .text("Say hello!")
   .run();
 
-console.log(result.greeting);
+console.log(result.message);
 
 agent.close();
 ```
 
-# License
+## License
 
 MIT
