@@ -1,8 +1,6 @@
-<p align="center">
+<p>
   <img src="packages/thinkwell/assets/logo.jpg" alt="Thinkwell Logo" width="200">
 </p>
-
-# thinkwell
 
 A TypeScript library for blending deterministic code with LLM-powered reasoning.
 
