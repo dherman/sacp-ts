@@ -29,7 +29,7 @@ export default async function main() {
           const now = new Date();
           return {
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            time: now.toLocaleTimeString,
+            time: now.toLocaleTimeString(),
             date: now.toLocaleDateString(),
           };
         }
