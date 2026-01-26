@@ -50,6 +50,20 @@ export {
   type ComponentHandler,
 } from "./connectors/index.js";
 
+// MCP Bridge
+export {
+  McpBridge,
+  createHttpListener,
+  type McpBridgeOptions,
+  type HttpListener,
+  type HttpListenerOptions,
+  type McpServerSpec,
+  type TransformedMcpServer,
+  type McpBridgeListener,
+  type McpBridgeConnection,
+  type McpBridgeMessage,
+} from "./mcp-bridge/index.js";
+
 // Re-export protocol types that are commonly used with the conductor
 export type {
   JsonRpcMessage,

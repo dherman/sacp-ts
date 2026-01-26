@@ -41,10 +41,10 @@ This plan tracks the implementation of the TypeScript conductor. See [doc/rfd/co
 
 ## Phase 5: MCP Bridge
 
-- [ ] HTTP listener for `acp:` URLs
-- [ ] URL transformation in `session/new`
-- [ ] `_mcp/connect`, `_mcp/message`, `_mcp/disconnect` routing
-- [ ] Connection lifecycle management
+- [x] HTTP listener for `acp:` URLs
+- [x] URL transformation in `session/new`
+- [x] `_mcp/connect`, `_mcp/message`, `_mcp/disconnect` routing
+- [x] Connection lifecycle management
 
 ## Phase 6: Integration
 

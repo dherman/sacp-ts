@@ -10,6 +10,7 @@
  * 4. Handles `_proxy/successor/*` message wrapping/unwrapping
  * 5. Manages proxy capability handshake during initialization
  * 6. Correlates requests with responses via a pending request map
+ * 7. Bridges MCP-over-ACP for agents without native ACP transport support
  */
 
 import type {
@@ -48,6 +49,7 @@ import type {
   InitializeResponse,
 } from "./types.js";
 import { MessageQueue } from "./message-queue.js";
+import { McpBridge, type McpServerSpec } from "./mcp-bridge/index.js";
 
 /**
  * Configuration for the Conductor
@@ -120,8 +122,27 @@ export class Conductor {
   private pendingRequests = new Map<string, PendingRequest>();
   private nextRequestId = 1;
 
+  // MCP Bridge for agents without native MCP-over-ACP support
+  private mcpBridge: McpBridge | null = null;
+
+  // Track whether agent supports mcp_acp_transport capability
+  private agentSupportsMcpAcpTransport = false;
+
+  // Pending session/new requests waiting for response (for MCP URL transformation)
+  private pendingSessionRequests = new Map<
+    string,
+    { sessionKey: string; originalParams: unknown }
+  >();
+
+  // Maps MCP connection IDs to their responders for _mcp/connect
+  private mcpConnectResponders = new Map<string, Responder>();
+
   constructor(config: ConductorConfig) {
     this.config = config;
+    // Initialize MCP bridge if enabled
+    if (config.mcpBridgeMode !== "disabled") {
+      this.mcpBridge = new McpBridge({ messageQueue: this.messageQueue });
+    }
   }
 
   /**
@@ -167,6 +188,11 @@ export class Conductor {
 
     if (this.agentConnection) {
       closePromises.push(this.agentConnection.close());
+    }
+
+    // Close MCP bridge
+    if (this.mcpBridge) {
+      closePromises.push(this.mcpBridge.close());
     }
 
     await Promise.all(closePromises);
@@ -447,12 +473,21 @@ export class Conductor {
         // Already handled by message queue closing
         break;
 
-      // MCP bridge messages will be handled in Phase 5
+      // MCP bridge messages
       case "mcp-connection-received":
+        await this.handleMcpConnectionReceived(message.acpUrl, message.connectionId);
+        break;
+
       case "mcp-connection-established":
+        // Connection established successfully - nothing more to do
+        break;
+
       case "mcp-client-to-server":
+        await this.handleMcpClientToServer(message.connectionId, message.dispatch);
+        break;
+
       case "mcp-connection-disconnected":
-        // Not implemented yet
+        await this.handleMcpConnectionDisconnected(message.connectionId);
         break;
     }
   }
@@ -471,6 +506,17 @@ export class Conductor {
       (dispatch.method === "initialize" || dispatch.method === "acp/initialize")
     ) {
       await this.handleInitialize(dispatch);
+      return;
+    }
+
+    // Check if this is a session/new request that needs MCP URL transformation
+    if (
+      dispatch.type === "request" &&
+      dispatch.method === "session/new" &&
+      this.mcpBridge &&
+      !this.agentSupportsMcpAcpTransport
+    ) {
+      await this.handleSessionNew(targetIndex, dispatch);
       return;
     }
 
@@ -630,7 +676,7 @@ export class Conductor {
         const outgoingId = this.generateRequestId();
         this.pendingRequests.set(String(outgoingId), {
           originalId: dispatch.id,
-          responder: dispatch.responder,
+          responder: this.createAgentInitializeResponder(dispatch.responder),
           source: "client",
         });
 
@@ -644,7 +690,9 @@ export class Conductor {
         const outgoingId = this.generateRequestId();
         this.pendingRequests.set(String(outgoingId), {
           originalId: dispatch.id,
-          responder: this.createProxyInitializeResponder(dispatch.responder),
+          responder: this.createProxyInitializeResponder(
+            this.createAgentInitializeResponder(dispatch.responder)
+          ),
           source: "client",
         });
 
@@ -703,6 +751,25 @@ export class Conductor {
             message: "Proxy component did not accept proxy capability",
           });
           return;
+        }
+        originalResponder.respond(result);
+      },
+      (error) => {
+        originalResponder.respondWithError(error);
+      }
+    );
+  }
+
+  /**
+   * Create a responder that captures the agent's mcp_acp_transport capability
+   */
+  private createAgentInitializeResponder(originalResponder: Responder): Responder {
+    return createResponder(
+      (result) => {
+        // Capture the mcp_acp_transport capability
+        const response = result as InitializeResponse;
+        if (response?.capabilities?.mcp_acp_transport) {
+          this.agentSupportsMcpAcpTransport = true;
         }
         originalResponder.respond(result);
       },
@@ -779,6 +846,234 @@ export class Conductor {
       return this.agentConnection;
     }
     return null;
+  }
+
+  /**
+   * Handle a session/new request - transform acp: URLs to http: URLs
+   *
+   * If the request contains MCP servers with acp: URLs and the agent doesn't
+   * support mcp_acp_transport, we:
+   * 1. Spawn HTTP listeners for each acp: URL
+   * 2. Transform the URLs to http://localhost:$PORT
+   * 3. Forward the modified request to the agent
+   * 4. When the response comes back with session_id, deliver it to the listeners
+   */
+  private async handleSessionNew(
+    targetIndex: number,
+    dispatch: Dispatch & { type: "request" }
+  ): Promise<void> {
+    const params = dispatch.params as {
+      mcpServers?: McpServerSpec[];
+      [key: string]: unknown;
+    } | undefined;
+
+    const servers = params?.mcpServers;
+
+    // Generate a session key to correlate the request with the response
+    const sessionKey = `session-${this.generateRequestId()}`;
+
+    // Transform MCP servers if needed
+    const { transformedServers, hasAcpServers } = await this.mcpBridge!.transformMcpServers(
+      servers,
+      sessionKey
+    );
+
+    if (!hasAcpServers) {
+      // No acp: servers - forward unchanged
+      const target = this.getTargetConnection(targetIndex);
+      if (target) {
+        this.forwardToConnection(target, dispatch);
+      }
+      return;
+    }
+
+    // Build the modified params with transformed servers
+    const modifiedParams = {
+      ...params,
+      mcpServers: transformedServers,
+    };
+
+    // Create a responder that captures the session_id and delivers it to listeners
+    const originalResponder = dispatch.responder;
+    const wrappedResponder = createResponder(
+      (result) => {
+        // Extract session_id from the response
+        const response = result as { sessionId?: string; [key: string]: unknown };
+        if (response?.sessionId) {
+          this.mcpBridge!.completeSession(sessionKey, response.sessionId);
+        }
+        originalResponder.respond(result);
+      },
+      async (error) => {
+        // Cancel the pending session on error
+        await this.mcpBridge!.cancelSession(sessionKey);
+        originalResponder.respondWithError(error);
+      }
+    );
+
+    // Forward the modified request
+    const target = this.getTargetConnection(targetIndex);
+    if (!target) {
+      dispatch.responder.respondWithError({
+        code: -32603,
+        message: `No target connection for index ${targetIndex}`,
+      });
+      return;
+    }
+
+    const modifiedDispatch: Dispatch = {
+      type: "request",
+      id: dispatch.id,
+      method: dispatch.method,
+      params: modifiedParams,
+      responder: wrappedResponder,
+    };
+
+    this.forwardToConnection(target, modifiedDispatch);
+  }
+
+  /**
+   * Handle an MCP connection received from the HTTP bridge
+   *
+   * When an agent connects to our HTTP listener, we need to:
+   * 1. Send _mcp/connect to the proxy that owns this acp: URL
+   * 2. Wait for the connection_id in the response
+   */
+  private async handleMcpConnectionReceived(
+    acpUrl: string,
+    connectionId: string
+  ): Promise<void> {
+    // The connection needs to be routed to the proxy that provides this MCP server
+    // For now, we route to the first proxy (or client if no proxies)
+    // In a more complete implementation, we'd track which proxy registered which URL
+
+    const mcpConnectParams = {
+      connectionId,
+      url: acpUrl,
+    };
+
+    // Create a responder for the _mcp/connect request
+    const responder = createResponder(
+      (result) => {
+        // Connection established - notify via message queue
+        const response = result as {
+          connectionId: string;
+          serverInfo?: { name: string; version: string };
+        };
+        this.messageQueue.push({
+          type: "mcp-connection-established",
+          connectionId: response.connectionId ?? connectionId,
+          serverInfo: response.serverInfo ?? { name: "unknown", version: "0.0.0" },
+        });
+      },
+      (error) => {
+        console.error("MCP connect failed:", error);
+      }
+    );
+
+    this.mcpConnectResponders.set(connectionId, responder);
+
+    // Route _mcp/connect request toward the client (right-to-left)
+    const dispatch: Dispatch = {
+      type: "request",
+      id: this.generateRequestId(),
+      method: "_mcp/connect",
+      params: mcpConnectParams,
+      responder,
+    };
+
+    // Send to client (or first proxy in the backward direction)
+    if (this.proxies.length === 0) {
+      // No proxies - send directly to client
+      if (this.clientConnection) {
+        this.forwardToConnection(this.clientConnection, dispatch);
+      }
+    } else {
+      // With proxies - wrap and send to last proxy (backward direction)
+      this.forwardWrappedToProxy(this.proxies.length - 1, dispatch);
+    }
+  }
+
+  /**
+   * Handle an MCP message from a client (through the HTTP bridge)
+   *
+   * This routes MCP tool calls and other messages through the ACP chain.
+   */
+  private async handleMcpClientToServer(
+    connectionId: string,
+    dispatch: Dispatch
+  ): Promise<void> {
+    // Wrap the MCP message in _mcp/message format
+    const mcpMessageParams = {
+      connectionId,
+      method: dispatch.type === "request" || dispatch.type === "notification"
+        ? (dispatch as { method: string }).method
+        : undefined,
+      params: dispatch.type === "request" || dispatch.type === "notification"
+        ? (dispatch as { params?: unknown }).params
+        : undefined,
+      id: dispatch.type === "request" ? (dispatch as { id: JsonRpcId }).id : undefined,
+    };
+
+    if (dispatch.type === "request") {
+      // Create _mcp/message request
+      const mcpDispatch: Dispatch = {
+        type: "request",
+        id: this.generateRequestId(),
+        method: "_mcp/message",
+        params: mcpMessageParams,
+        responder: (dispatch as { responder: Responder }).responder,
+      };
+
+      // Route toward client (right-to-left direction)
+      if (this.proxies.length === 0) {
+        if (this.clientConnection) {
+          this.forwardToConnection(this.clientConnection, mcpDispatch);
+        }
+      } else {
+        this.forwardWrappedToProxy(this.proxies.length - 1, mcpDispatch);
+      }
+    } else if (dispatch.type === "notification") {
+      // Create _mcp/message notification
+      const mcpDispatch: Dispatch = {
+        type: "notification",
+        method: "_mcp/message",
+        params: mcpMessageParams,
+      };
+
+      // Route toward client
+      if (this.proxies.length === 0) {
+        if (this.clientConnection) {
+          this.forwardToConnection(this.clientConnection, mcpDispatch);
+        }
+      } else {
+        this.forwardWrappedToProxy(this.proxies.length - 1, mcpDispatch);
+      }
+    }
+  }
+
+  /**
+   * Handle an MCP connection being disconnected
+   */
+  private async handleMcpConnectionDisconnected(connectionId: string): Promise<void> {
+    // Clean up the connect responder if still pending
+    this.mcpConnectResponders.delete(connectionId);
+
+    // Send _mcp/disconnect notification toward client
+    const dispatch: Dispatch = {
+      type: "notification",
+      method: "_mcp/disconnect",
+      params: { connectionId },
+    };
+
+    // Route toward client
+    if (this.proxies.length === 0) {
+      if (this.clientConnection) {
+        this.forwardToConnection(this.clientConnection, dispatch);
+      }
+    } else {
+      this.forwardWrappedToProxy(this.proxies.length - 1, dispatch);
+    }
   }
 
   /**
