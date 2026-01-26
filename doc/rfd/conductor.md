@@ -32,7 +32,7 @@ A pure TypeScript conductor would eliminate these friction points.
 
 ### Reference Implementation
 
-The Rust implementation is in `doc/.local/symposium-acp/src/sacp-conductor/`. Key files:
+The Rust implementation is in https://github.com/agentclientprotocol/symposium-acp (or may already be cloned locally in `doc/.local/symposium-acp/src/sacp-conductor/`). Key files:
 
 | File | Purpose |
 |------|---------|
