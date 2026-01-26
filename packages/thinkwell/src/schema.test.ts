@@ -167,7 +167,7 @@ describe("outputSchema deprecation", () => {
 
       // This simulates what the deprecated method does
       console.warn(
-        "ThinkBuilder.outputSchema() is deprecated. Use patchwork.think(schemaOf<T>(schema)) instead."
+        "ThinkBuilder.outputSchema() is deprecated. Use agent.think(schemaOf<T>(schema)) instead."
       );
 
       assert.strictEqual(warnings.length, 1);

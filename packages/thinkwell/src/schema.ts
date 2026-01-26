@@ -17,7 +17,7 @@ import type { JsonSchema, SchemaProvider } from "@thinkwell/acp";
  *   points: string[];
  * }
  *
- * const result = await patchwork
+ * const result = await agent
  *   .think(schemaOf<Summary>({
  *     type: "object",
  *     properties: {

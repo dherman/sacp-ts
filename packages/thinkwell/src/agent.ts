@@ -78,16 +78,17 @@ export interface AgentConnection {
 }
 
 /**
- * The main entry point for Patchwork.
+ * The main entry point for Thinkwell.
  *
  * Agent represents a connection to an AI agent (like Claude Code) and provides
  * a fluent API for blending deterministic code with LLM-powered reasoning.
  *
  * @example Simple usage with ephemeral sessions
  * ```typescript
- * import { Agent, schemaOf } from "@anthropic/patchwork";
+ * import { Agent, schemaOf } from "thinkwell";
+ * import { CLAUDE_CODE } from "thinkwell/connectors";
  *
- * const agent = await Agent.connect("npx -y @zed-industries/claude-code-acp");
+ * const agent = await Agent.connect(CLAUDE_CODE);
  *
  * const summary = await agent
  *   .think(schemaOf<{ title: string; points: string[] }>({
@@ -107,7 +108,8 @@ export interface AgentConnection {
  *
  * @example Multi-turn conversation with explicit session
  * ```typescript
- * const agent = await Agent.connect("npx -y @zed-industries/claude-code-acp");
+ * import { CLAUDE_CODE } from "thinkwell/connectors";
+ * const agent = await Agent.connect(CLAUDE_CODE);
  * const session = await agent.createSession({ cwd: "/my/project" });
  *
  * const analysis = await session
@@ -141,7 +143,8 @@ export class Agent {
    *
    * @example
    * ```typescript
-   * const agent = await Agent.connect("npx -y @zed-industries/claude-code-acp");
+   * import { CLAUDE_CODE } from "thinkwell/connectors";
+   * const agent = await Agent.connect(CLAUDE_CODE);
    * ```
    */
   static async connect(command: string, options?: ConnectOptions): Promise<Agent> {

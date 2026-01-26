@@ -173,7 +173,7 @@ export class ThinkBuilder<Output> {
    *
    * @example
    * ```typescript
-   * import { schemaOf } from "@dherman/patchwork";
+   * import { schemaOf } from "thinkwell";
    *
    * interface SearchInput {
    *   query: string;
@@ -423,7 +423,7 @@ export class ThinkBuilder<Output> {
     }
 
     // Create the MCP server builder
-    const serverBuilder = mcpServer("patchwork");
+    const serverBuilder = mcpServer("thinkwell");
 
     // Track if we've received a result
     let resultReceived = false;

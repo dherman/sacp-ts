@@ -57,7 +57,7 @@ describe("Example 4: Build-time generated schemas", () => {
       // doesn't match the Summary type, TypeScript will error
       const _provider: typeof SummarySchema = SummarySchema;
 
-      // Simulate what patchwork.think() would return
+      // Simulate what agent.think() would return
       const mockResult: Summary = {
         title: "Test",
         points: ["point 1"],
