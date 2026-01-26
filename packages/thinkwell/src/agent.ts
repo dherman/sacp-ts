@@ -146,12 +146,11 @@ export class Agent {
    * ```
    */
   static async connect(command: string, options?: ConnectOptions): Promise<Agent> {
-    // Parse the command string into an array
-    const commandArray = command.split(/\s+/).filter(Boolean);
-
     // Create a conductor that spawns the agent as a subprocess
+    // The command string is passed as a single agent command - fromCommands
+    // will parse it internally to extract command and arguments
     const conductor = new Conductor({
-      instantiator: fromCommands(commandArray),
+      instantiator: fromCommands([command]),
     });
 
     // Create an in-memory channel pair for client ↔ conductor communication
