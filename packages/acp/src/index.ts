@@ -34,5 +34,5 @@ export { ActiveSession, SessionBuilder } from "./session.js";
 export type { SessionUpdate, PromptMessage, McpReadyOptions } from "./session.js";
 
 // Connection
-export { SacpConnection, connect } from "./connection.js";
+export { SacpConnection, connect, connectToConductor } from "./connection.js";
 export type { SessionOptions } from "./connection.js";

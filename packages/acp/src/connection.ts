@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn } from "node:child_process";
 import { Readable, Writable } from "node:stream";
 import {
   ClientSideConnection,
@@ -12,7 +12,15 @@ import {
   type PromptRequest,
   type PromptResponse,
   type McpServer as AcpMcpServer,
+  type Stream,
+  type AnyMessage,
 } from "@agentclientprotocol/sdk";
+import type {
+  Conductor,
+  ComponentConnector,
+  ComponentConnection,
+  JsonRpcMessage,
+} from "@thinkwell/conductor";
 import { McpOverAcpHandler } from "./mcp-over-acp-handler.js";
 import type { ActiveSession, SessionUpdate } from "./session.js";
 import type { McpServerConfig } from "./types.js";
@@ -27,24 +35,33 @@ export interface SessionOptions {
 }
 
 /**
+ * Cleanup function called when the connection closes
+ */
+type CleanupFn = () => void;
+
+/**
  * Connection to the SACP conductor via the ACP SDK.
  *
  * This class wraps the official @agentclientprotocol/sdk's ClientSideConnection
  * and adds SACP-specific functionality (MCP-over-ACP handling).
+ *
+ * Supports two modes:
+ * - Subprocess mode: spawns a conductor as a child process
+ * - In-process mode: runs the conductor in the same process
  */
 export class SacpConnection {
-  private readonly _process: ChildProcess;
+  private readonly _cleanup: CleanupFn;
   private readonly _connection: ClientSideConnection;
   private readonly _mcpHandler: McpOverAcpHandler;
   private readonly _sessionHandlers: Map<string, ActiveSession> = new Map();
   private _initialized: boolean = false;
 
   constructor(
-    process: ChildProcess,
+    cleanup: CleanupFn,
     connection: ClientSideConnection,
     mcpHandler: McpOverAcpHandler
   ) {
-    this._process = process;
+    this._cleanup = cleanup;
     this._connection = connection;
     this._mcpHandler = mcpHandler;
   }
@@ -176,7 +193,7 @@ export class SacpConnection {
    * Close the connection
    */
   close(): void {
-    this._process.kill();
+    this._cleanup();
   }
 }
 
@@ -331,10 +348,105 @@ export async function connect(command: string[]): Promise<SacpConnection> {
   );
 
   // Create our wrapper connection and store it in the holder
-  const sacpConnection = new SacpConnection(childProcess, clientConnection, mcpHandler);
+  const cleanup = () => childProcess.kill();
+  const sacpConnection = new SacpConnection(cleanup, clientConnection, mcpHandler);
   connectionHolder.connection = sacpConnection;
 
   return sacpConnection;
+}
+
+/**
+ * Connect to an in-process conductor.
+ *
+ * This runs the conductor in the same process, avoiding subprocess overhead.
+ * The conductor will manage components (proxies and agent) according to its
+ * configured instantiator.
+ *
+ * @param conductor - The configured Conductor instance to connect to
+ * @returns A SacpConnection wrapping the in-process conductor
+ */
+export async function connectToConductor(
+  conductor: Conductor
+): Promise<SacpConnection> {
+  // Create an in-memory channel pair for client ↔ conductor communication
+  const { createChannelPair } = await import("@thinkwell/conductor");
+  const pair = createChannelPair();
+
+  // Create a Stream adapter from the ComponentConnection
+  const stream = componentConnectionToStream(pair.left);
+
+  // Create the MCP handler
+  const mcpHandler = new McpOverAcpHandler();
+
+  // Use a holder object to break the circular reference
+  const connectionHolder: { connection: SacpConnection | null } = { connection: null };
+
+  // Create the ACP client connection
+  const clientConnection = new ClientSideConnection(
+    (_agent: Agent) => createClient(connectionHolder, mcpHandler),
+    stream
+  );
+
+  // Create a connector that provides the other end of the channel
+  const clientConnector: ComponentConnector = {
+    async connect() {
+      return pair.right;
+    },
+  };
+
+  // Start the conductor's message loop in the background
+  const conductorPromise = conductor.connect(clientConnector);
+
+  // Handle conductor errors/completion
+  conductorPromise.catch((error) => {
+    console.error("Conductor error:", error);
+  });
+
+  // Cleanup shuts down the conductor
+  const cleanup = () => {
+    conductor.shutdown().catch((error) => {
+      console.error("Conductor shutdown error:", error);
+    });
+  };
+
+  const sacpConnection = new SacpConnection(cleanup, clientConnection, mcpHandler);
+  connectionHolder.connection = sacpConnection;
+
+  return sacpConnection;
+}
+
+/**
+ * Convert a ComponentConnection to the SDK's Stream interface.
+ *
+ * The SDK expects Web Streams of AnyMessage objects, while the conductor
+ * uses a simpler send/messages interface.
+ */
+function componentConnectionToStream(connection: ComponentConnection): Stream {
+  // Create a ReadableStream from the async iterable
+  const readable = new ReadableStream<AnyMessage>({
+    async start(controller) {
+      try {
+        for await (const message of connection.messages) {
+          controller.enqueue(message as AnyMessage);
+        }
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+  });
+
+  // Create a WritableStream that sends to the connection
+  const writable = new WritableStream<AnyMessage>({
+    write(message) {
+      connection.send(message as JsonRpcMessage);
+    },
+    close() {
+      connection.close();
+    },
+  });
+
+  return { readable, writable };
 }
 
 /**

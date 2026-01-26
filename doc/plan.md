@@ -49,9 +49,9 @@ This plan tracks the implementation of the TypeScript conductor. See [doc/rfd/co
 ## Phase 6: Integration
 
 - [x] Update `@thinkwell/acp` to use `@thinkwell/protocol`
-- [ ] Add in-process conductor option to `SacpConnection`
-- [ ] Integration tests with real agent
-- [ ] Comparison tests vs Rust conductor behavior
+- [x] Add in-process conductor option to `SacpConnection`
+- [x] Integration tests with mock agent
+- [x] Comparison tests vs Rust conductor behavior
 
 ## Phase 7: Polish
 

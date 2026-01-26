@@ -30,6 +30,7 @@
   "license": "MIT",
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.4.0",
+    "@thinkwell/conductor": "workspace:*",
     "@thinkwell/protocol": "workspace:*",
     "uuid": "^11.0.3"
   },

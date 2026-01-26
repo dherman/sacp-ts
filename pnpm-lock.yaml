@@ -66,6 +66,9 @@ importers:
       '@agentclientprotocol/sdk':
         specifier: ^0.4.0
         version: 0.4.9
+      '@thinkwell/conductor':
+        specifier: workspace:*
+        version: link:../conductor
       '@thinkwell/protocol':
         specifier: workspace:*
         version: link:../protocol
